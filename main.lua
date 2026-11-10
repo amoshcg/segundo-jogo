@@ -7,18 +7,20 @@ require "sprites"
 -- Limpe as salas, junte itens e derrote o chefe de cada um dos 3 andares.
 --
 -- Controle (mesmo mapeamento do primeiro-jogo; botoes em losango):
---   direcional ........ anda
---   Y / X / A / B ..... atira para esquerda / cima / direita / baixo
---   L ................. rola (invencivel no comeco do rolamento)
---   R ................. pulso: apaga as balas inimigas
---   L + R ............. pausa
---   Menus: B confirma, A volta
+--   direcional ... anda e vira
+--   B ............ atira para onde esta olhando (segurando, a mira trava)
+--   A ............ rola (invencivel no comeco do rolamento)
+--   Y ............ pulso: apaga as balas inimigas
+--   X ............ troca de arma / pega arma do chao (segurar: larga)
+--   R ............ pausa
+--   Menus: B confirma, A volta. O L nao e usado (trava o console).
 --
--- Arquivos: core (base), dungeon (salas), items, player, enemies.
+-- Arquivos: core (base), dungeon (salas), items, weapons, player, enemies.
 -- ===================================================================
 local K = require "core"
 local D = require "dungeon"
 local I = require "items"
+local G = require "weapons"
 local P = require "player"
 local E = require "enemies"
 
@@ -71,6 +73,25 @@ local function take_item()
         W.pool = pool
     end
     return table.remove(W.pool)
+end
+
+-- armas: mesmo esquema, sem a pistola (que todo mundo ja tem)
+local function take_gun()
+    if #W.gunpool == 0 then
+        local pool = {}
+        for i = 2, #G.list do pool[#pool + 1] = G.list[i] end
+        for i = #pool, 2, -1 do
+            local j = rnd(i)
+            pool[i], pool[j] = pool[j], pool[i]
+        end
+        W.gunpool = pool
+    end
+    return table.remove(W.gunpool)
+end
+
+-- deixa uma arma cheia no chao da sala
+local function place_gun(room, def, x, y)
+    room.guns[#room.guns + 1] = { def = def, ammo = def.ammo, x = x, y = y, t = 0 }
 end
 
 local function banner(title, sub, t)
@@ -126,6 +147,7 @@ local function enter_room(room, dir)
     clear_list(W.parts)
     clear_list(W.spawns)
     clear_list(W.texts)
+    clear_list(W.booms)
     W.warns = {}
     W.boss, W.pulse = nil, nil
     W.fade = 12
@@ -174,16 +196,25 @@ local function setup_floor()
         room.waves = 0
         if room.kind == "normal" and rnd() < 0.2 + W.level * 0.1 then room.waves = 1 end
         if room.kind == "treasure" then
+            -- um item e uma arma para cada jogador
             for j = 1, W.nplayers do
+                local x = 240 + (j * 2 - W.nplayers - 1) * 24
                 room.peds[#room.peds + 1] = {
-                    kind = "item", item = take_item(), price = 0,
-                    x = 240 + (j * 2 - W.nplayers - 1) * 24, y = 120, t = 0,
+                    kind = "item", item = take_item(), price = 0, x = x, y = 108, t = 0,
                 }
+                place_gun(room, take_gun(), x, 150)
             end
         elseif room.kind == "shop" then
-            room.peds[1] = { kind = "heart", price = 3, x = 192, y = 120, t = 0 }
-            room.peds[2] = { kind = "item", item = take_item(), price = 6 + W.level * 2, x = 240, y = 120, t = 0 }
-            room.peds[3] = { kind = "pulse", price = 3, x = 288, y = 120, t = 0 }
+            room.peds[1] = { kind = "heart", price = 3, x = 152, y = 120, t = 0 }
+            room.peds[2] = { kind = "pulse", price = 3, x = 196, y = 120, t = 0 }
+            room.peds[3] = { kind = "ammo", price = 4, x = 240, y = 120, t = 0 }
+            room.peds[4] = { kind = "gun", gun = take_gun(), price = 7 + W.level * 2, x = 284, y = 120, t = 0 }
+            room.peds[5] = { kind = "item", item = take_item(), price = 6 + W.level * 2, x = 328, y = 120, t = 0 }
+        elseif room.kind == "start" and W.level == 1 then
+            -- uma arma logo de cara, para aprender a trocar
+            for j = 1, W.nplayers do
+                place_gun(room, take_gun(), 240 + (j * 2 - W.nplayers - 1) * 24, 76)
+            end
         end
     end
     W.shadow = THEMES[W.level].shadow
@@ -199,6 +230,7 @@ local function start_game(n)
     W.level, W.coins, W.kills, W.rooms, W.time = 1, 0, 0, 0, 0
     W.shake, W.overt, W.wint = 0, 0, nil
     W.pool = {}
+    W.gunpool = {}
     W.banner = nil
     W.screen = "play"
     setup_floor()
@@ -260,7 +292,9 @@ local function room_cleared()
         end
         drop("heart", 200, 176)
         drop("heart", 280, 176)
+        drop("ammo", 240, 176)
         if W.level < LAST_LEVEL then
+            place_gun(room, take_gun(), 240, 204)
             room.trap = { x = 240, y = 72, t = 0 }
             banner("CHEFE DERROTADO", "DESCA PELO ALCAPAO", 180)
         else
@@ -279,8 +313,12 @@ local function room_cleared()
         drop("coin", x + 8, y)
     elseif r < 0.65 then
         drop("heart", x, y)
-    elseif r < 0.75 then
+    elseif r < 0.73 then
         drop("pulse", x, y)
+    elseif r < 0.85 then
+        drop("ammo", x, y)
+    elseif r < 0.91 then
+        place_gun(room, take_gun(), x, y)
     end
 end
 
@@ -321,6 +359,24 @@ local function update_spawns()
             K.burst(s.x, s.y, 6, col.rose, 2)
         end
     end
+end
+
+-- explosao da bazuca: machuca todos os inimigos no raio
+local function explode(x, y, r, dmg, own)
+    local en = W.enemies
+    for j = 1, #en do
+        local e = en[j]
+        local dx, dy = e.x - x, e.y - y
+        local rr = r + e.r
+        local d2 = dx * dx + dy * dy
+        if d2 < rr * rr and not e.air then
+            local d = sqrt(d2) + 0.01
+            E.damage(e, dmg, dx / d * 3, dy / d * 3, own)
+        end
+    end
+    W.booms[#W.booms + 1] = { x = x, y = y, r = r, t = 0 }
+    K.burst(x, y, 10, col.orange, 3)
+    K.shake(5)
 end
 
 local function update_pbul()
@@ -392,6 +448,7 @@ local function update_pbul()
         end
 
         if dead then
+            if s.boom then explode(s.x, s.y, s.boom, s.boomdmg, s.own) end
             list[i] = list[#list]
             list[#list] = nil
         end
@@ -460,7 +517,8 @@ local function update_pickups()
             local p = ps[j]
             local wants = not p.dead and (it.k == "coin"
                 or (it.k == "heart" and p.hp < p.maxhp)
-                or (it.k == "pulse" and p.pulses < 6))
+                or (it.k == "pulse" and p.pulses < 6)
+                or (it.k == "ammo" and P.needs_ammo(p)))
             if wants then
                 local dx, dy = p.x - it.x, p.y - it.y
                 local d2 = dx * dx + dy * dy
@@ -473,6 +531,9 @@ local function update_pickups()
                         W.coins = W.coins + 1
                     elseif it.k == "heart" then
                         P.heal(p, 2)
+                    elseif it.k == "ammo" then
+                        P.add_ammo(p, 0.5)
+                        K.float("+MUNICAO", p.x, p.y - 12, col.white)
                     else
                         p.pulses = p.pulses + 1
                     end
@@ -483,6 +544,9 @@ local function update_pickups()
             end
         end
     end
+
+    local guns = room.guns
+    for i = 1, #guns do guns[i].t = guns[i].t + 1 end
 
     -- pedestais: itens gratis (tesouro/chefe) ou com preco (loja)
     local peds = room.peds
@@ -500,6 +564,11 @@ local function update_pickups()
                 elseif pd.kind == "pulse" then
                     ok = p.pulses < 6
                     if ok then p.pulses = p.pulses + 1 end
+                elseif pd.kind == "ammo" then
+                    ok = P.add_ammo(p, 1)
+                elseif pd.kind == "gun" then
+                    ok = P.wants_gun(p, pd.gun)
+                    if ok then P.give_gun(p, pd.gun, pd.gun.ammo, pd.x, pd.y + 22) end
                 else
                     pd.item.apply(p)
                     p.items[#p.items + 1] = pd.item
@@ -543,9 +612,9 @@ local function update_texts()
 end
 
 local function update_play()
-    -- pausa: L + R juntos
+    -- pausa no R
     for i = 1, W.nplayers do
-        if K.down(i, "l") and K.down(i, "r") and (K.pressed(i, "l") or K.pressed(i, "r")) then
+        if K.pressed(i, "r") then
             W.screen = "pause"
             return
         end
@@ -576,6 +645,11 @@ local function update_play()
     if pu then
         pu.t = pu.t + 1
         if pu.t > 18 then W.pulse = nil end
+    end
+    local booms = W.booms
+    for i = #booms, 1, -1 do
+        booms[i].t = booms[i].t + 1
+        if booms[i].t > 10 then table.remove(booms, i) end
     end
 
     if W.locked and #W.enemies == 0 and #W.spawns == 0 then
@@ -639,6 +713,12 @@ local function draw_door(th, n, x0, y0, x1, y1)
     K.rect(x0, y0, x1, y1, frame)
 end
 
+-- caixinha de municao
+local function draw_ammo(x, y)
+    rf(x - 4, y - 3, x + 4, y + 3, col.moss)
+    rf(x - 4, y - 1, x + 4, y, col.yellow)
+end
+
 local function draw_ped(pd)
     local x, y = pd.x, pd.y
     local b = flr(sin((W.time + x) * 0.08) * 2)
@@ -649,6 +729,10 @@ local function draw_ped(pd)
     elseif pd.kind == "pulse" then
         cf(x, y - 7 + b, 4, col.cyan)
         rf(x - 1, y - 8 + b, x, y - 7 + b, col.white)
+    elseif pd.kind == "ammo" then
+        draw_ammo(x, y - 7 + b)
+    elseif pd.kind == "gun" then
+        G.icon(pd.gun, x, y - 7 + b)
     else
         cf(x, y - 7 + b, 6, pd.item.c)
         K.circ(x, y - 7 + b, 6, col.white)
@@ -709,9 +793,9 @@ local function draw_room()
 
     -- dicas no chao da primeira sala
     if room.kind == "start" and W.level == 1 then
-        prc("DIRECIONAL: ANDAR", 240, 168, th.wlight)
-        prc("Y  X  A  B: ATIRAR (ESQUERDA, CIMA, DIREITA, BAIXO)", 240, 180, th.wlight)
-        prc("L: ROLAR     R: PULSO     L+R: PAUSA", 240, 192, th.wlight)
+        prc("DIRECIONAL: ANDAR E MIRAR     B: ATIRAR (SEGURE PARA TRAVAR A MIRA)", 240, 168, th.wlight)
+        prc("A: ROLAR     Y: PULSO     X: TROCAR OU PEGAR ARMA (SEGURE: LARGAR)", 240, 180, th.wlight)
+        prc("R: PAUSA", 240, 192, th.wlight)
     end
 
     -- pedras e espinhos (em faixas), depois caixotes
@@ -763,9 +847,30 @@ local function draw_room()
             rf(x - 1, y - 2, x - 1, y, col.white)
         elseif it.k == "heart" then
             heart(x - 4, y - 4, col.red)
+        elseif it.k == "ammo" then
+            draw_ammo(x, y)
         else
             cf(x, y, 3, col.cyan)
             rf(x - 1, y - 1, x, y, col.white)
+        end
+    end
+
+    -- armas no chao: o X aparece quando da para pegar/trocar com o botao
+    local guns = room.guns
+    local psl = W.players
+    for i = 1, #guns do
+        local g = guns[i]
+        K.circ(g.x, g.y, 9, W.time % 30 < 15 and col.white or col.gray)
+        G.icon(g.def, g.x, g.y + flr(sin((W.time + i * 13) * 0.1) * 1.5))
+        if g.t > 25 then
+            for j = 1, #psl do
+                local p = psl[j]
+                local dx, dy = p.x - g.x, p.y - g.y
+                if not p.dead and dx * dx + dy * dy < 14 * 14 then
+                    prs("X: " .. g.def.name, g.x, g.y - 22, col.yellow)
+                    break
+                end
+            end
         end
     end
 
@@ -797,8 +902,12 @@ local function draw_room()
     local pb = W.pbul
     for i = 1, #pb do
         local s = pb[i]
-        cf(s.x, s.y, s.r, s.own == 1 and col.cyan or col.lime)
-        if s.r > 2 then rf(s.x - 1, s.y - 1, s.x + 1, s.y + 1, col.white) end
+        if s.flame then
+            cf(s.x, s.y, s.life > 9 and 2 or 3, s.life % 4 < 2 and col.orange or col.yellow)
+        else
+            cf(s.x, s.y, s.r, s.own == 1 and col.cyan or col.lime)
+            if s.r > 2 then rf(s.x - 1, s.y - 1, s.x + 1, s.y + 1, col.white) end
+        end
     end
 
     -- balas dos inimigos (com muitas na tela, tira o miolo para aliviar)
@@ -829,6 +938,12 @@ local function draw_room()
     if pu then
         K.circ(pu.x, pu.y, pu.t * 7 + 4, col.cyan)
         K.circ(pu.x, pu.y, pu.t * 7, col.white)
+    end
+    local booms = W.booms
+    for i = 1, #booms do
+        local b = booms[i]
+        if b.t < 4 then cf(b.x, b.y, flr(b.r * 0.6), col.yellow) end
+        K.circ(b.x, b.y, flr(b.r * (0.5 + b.t / 20)), col.orange)
     end
 
     local texts = W.texts
@@ -870,6 +985,21 @@ local function draw_hud()
         if p.dead then
             pr("CAIDO", left and 20 or 428, 17, col.rose)
         end
+
+        -- arma atual, municao e uma marquinha por arma carregada
+        local gx = left and 92 or 284
+        local g = p.guns[p.gi]
+        local d = g.def
+        G.icon(d, gx + 6, 8)
+        pr(d.name, gx + 18, 4, d.c)
+        if d.ammo then
+            pr(K.str(g.ammo), gx + 18, 16, g.ammo > 0 and col.white or col.rose)
+        else
+            pr("INF", gx + 18, 16, col.gray)
+        end
+        for k = 1, #p.guns do
+            rf(gx + k * 5 - 4, 19, gx + k * 5 - 1, 22, k == p.gi and col.yellow or col.coal)
+        end
     end
 
     -- sozinho, sobra o lado direito: mostra os itens ja pegos
@@ -877,17 +1007,15 @@ local function draw_hud()
         local items = ps[1].items
         for j = 1, math.min(#items, 20) do
             local k = j - 1
-            pr(items[j].icon, 392 + (k % 10) * 8, 4 + flr(k / 10) * 12, items[j].c)
+            pr(items[j].icon, 300 + (k % 10) * 8, 4 + flr(k / 10) * 12, items[j].c)
         end
     end
 
     -- andar e moedas
-    pr("ANDAR " .. K.str(W.level), 112, 4, col.silver)
-    pr(THEMES[W.level].name, 112, 16, col.gray)
-    cf(290, 8, 3, col.yellow)
-    rf(289, 6, 289, 8, col.white)
-    pr(K.str(W.coins), 298, 4, col.yellow)
-    pr("ABATES " .. K.str(W.kills), 286, 16, col.gray)
+    pr("ANDAR " .. K.str(W.level), 160, 4, col.silver)
+    cf(164, 20, 3, col.yellow)
+    rf(163, 18, 163, 20, col.white)
+    pr(K.str(W.coins), 172, 16, col.yellow)
 
     -- minimapa: so mostra as salas ja vistas
     local list = W.floor.list
@@ -1020,8 +1148,7 @@ local function draw_controls()
 
     -- desenho do controle: os botoes acendem quando apertados
     local on, body = col.white, col.ice
-    rf(118, 22, 178, 30, lit("l") and on or col.gray)
-    pr("L", 145, 23, col.ink)
+    rf(118, 22, 178, 30, col.coal)
     rf(302, 22, 362, 30, lit("r") and on or col.gray)
     pr("R", 329, 23, col.ink)
     cf(160, 72, 42, body)
@@ -1046,26 +1173,27 @@ local function draw_controls()
     end
 
     local rows = {
-        { "DIRECIONAL", "ANDAR" },
-        { "Y  X  A  B", "ATIRAR: ESQUERDA, CIMA, DIREITA, BAIXO" },
-        { "DOIS JUNTOS", "ATIRA NA DIAGONAL" },
-        { "L", "ROLAR (INVENCIVEL NO COMECO)" },
-        { "R", "PULSO: APAGA AS BALAS INIMIGAS" },
-        { "L + R", "PAUSA" },
+        { "DIRECIONAL", "ANDAR E MIRAR (ATIRA PARA ONDE OLHA)" },
+        { "B", "ATIRAR - SEGURANDO, A MIRA TRAVA: ANDE DE LADO" },
+        { "A", "ROLAR (INVENCIVEL NO COMECO)" },
+        { "Y", "PULSO: APAGA AS BALAS INIMIGAS" },
+        { "X", "TROCAR DE ARMA / PEGAR ARMA DO CHAO" },
+        { "X (SEGURAR)", "LARGAR A ARMA ATUAL" },
+        { "R", "PAUSA" },
     }
     for i = 1, #rows do
-        local y = 112 + i * 13
-        pr(rows[i][1], 70, y, col.cyan)
-        pr(rows[i][2], 160, y, col.white)
+        local y = 108 + i * 12
+        pr(rows[i][1], 62, y, col.cyan)
+        pr(rows[i][2], 146, y, col.white)
     end
     prc("2 JOGADORES: CADA UM NO SEU CONTROLE, NA MESMA SALA", 240, 210, col.lime)
-    prc("TECLADO: W A S D ANDA   G J H K ATIRA (ESQ, CIMA, DIR, BAIXO)", 240, 224, col.gray)
+    prc("TECLADO: W A S D ANDA   K ATIRA   H ROLA   G PULSO   J ARMA", 240, 224, col.gray)
     prc("A: VOLTAR", 240, 248, col.silver)
 end
 
 local function update_pause()
     for i = 1, W.nplayers do
-        if K.pressed(i, "b") then W.screen = "play" end
+        if K.pressed(i, "b") or K.pressed(i, "r") then W.screen = "play" end
         if K.pressed(i, "a") then W.screen = "title" end
     end
 end
@@ -1080,7 +1208,7 @@ local function draw_pause()
     rf(150, 96, 330, 186, col.ink)
     K.rect(150, 96, 330, 186, col.yellow)
     prc("PAUSA", 240, 106, col.yellow)
-    prc("B: CONTINUAR", 240, 128, col.white)
+    prc("B OU R: CONTINUAR", 240, 128, col.white)
     prc("A: SAIR PARA O MENU", 240, 142, col.silver)
     -- itens de cada jogador
     local ps = W.players

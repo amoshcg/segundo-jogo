@@ -296,7 +296,7 @@ local function try_layout(target)
         local r = {
             gx = x, gy = y, depth = depth, kind = "normal", doors = {},
             cleared = false, visited = false, seen = false,
-            pickups = {}, peds = {},
+            pickups = {}, peds = {}, guns = {},
         }
         cells[key(x, y)] = r
         list[#list + 1] = r
@@ -363,7 +363,7 @@ local function fallback_layout()
         local r = {
             gx = s[1], gy = s[2], depth = i, kind = s[3], doors = {},
             cleared = false, visited = false, seen = false,
-            pickups = {}, peds = {},
+            pickups = {}, peds = {}, guns = {},
         }
         cells[key(s[1], s[2])] = r
         list[#list + 1] = r

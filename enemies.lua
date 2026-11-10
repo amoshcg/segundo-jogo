@@ -62,6 +62,10 @@ end
 
 -- marca um ponto onde um inimigo vai nascer daqui a t quadros
 function E.telegraph(kind, x, y, t)
+    -- nunca dentro da parede ou de uma pedra (o inimigo ficaria preso la)
+    x = math.max(28, math.min(452, x))
+    y = math.max(28, math.min(212, y))
+    x, y = D.free_near(x, y)
     W.spawns[#W.spawns + 1] = { kind = kind, x = x, y = y, t = t, max = t }
 end
 
@@ -658,7 +662,8 @@ end
 local function drop(e)
     local r = rnd()
     local k
-    if r < 0.22 then k = "coin" elseif r < 0.27 then k = "heart" elseif r < 0.29 then k = "pulse" end
+    if r < 0.22 then k = "coin" elseif r < 0.27 then k = "heart" elseif r < 0.29 then k = "pulse"
+    elseif r < 0.33 then k = "ammo" end
     if k then
         local list = W.room.pickups
         list[#list + 1] = { k = k, x = e.x, y = e.y, t = 0 }

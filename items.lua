@@ -1,7 +1,7 @@
 -- ===================================================================
 -- items.lua - itens passivos. Quem pega o item fica com o efeito ate
--- o fim da partida. Cada item: nome, descricao, letra/cor do icone e
--- a funcao que muda os atributos do jogador.
+-- o fim da partida, em qualquer arma. Cada item: nome, descricao,
+-- letra/cor do icone e a funcao que muda os atributos do jogador.
 -- ===================================================================
 local K = require "core"
 local col = K.col
@@ -11,11 +11,11 @@ local I = {}
 I.list = {
     {
         name = "POLVORA SECA", desc = "DANO +", icon = "D", c = col.orange,
-        apply = function(p) p.dmg = p.dmg + 1.2 end,
+        apply = function(p) p.dmgmul = p.dmgmul + 0.35 end,
     },
     {
         name = "GATILHO LEVE", desc = "ATIRA MAIS RAPIDO", icon = "G", c = col.yellow,
-        apply = function(p) p.rate = math.max(6, p.rate * 0.78) end,
+        apply = function(p) p.ratemul = math.max(0.4, p.ratemul * 0.8) end,
     },
     {
         name = "BOTAS AGEIS", desc = "VELOCIDADE +", icon = "V", c = col.lime,
@@ -24,15 +24,15 @@ I.list = {
     {
         name = "CANO LONGO", desc = "TIRO VAI MAIS LONGE", icon = "L", c = col.silver,
         apply = function(p)
-            p.range = p.range + 14
-            p.shotspd = math.min(6.5, p.shotspd + 0.7)
+            p.rangemul = p.rangemul + 0.3
+            p.shotadd = math.min(2, p.shotadd + 0.7)
         end,
     },
     {
-        name = "TIRO TRIPLO", desc = "TRES BALAS POR TIRO", icon = "3", c = col.cyan,
+        name = "TIRO TRIPLO", desc = "+2 BALAS POR TIRO", icon = "3", c = col.cyan,
         apply = function(p)
-            p.multi = math.min(5, p.multi + 2)
-            p.dmg = p.dmg * 0.8
+            p.multi = math.min(4, p.multi + 2)
+            p.dmgmul = p.dmgmul * 0.8
         end,
     },
     {
@@ -43,7 +43,7 @@ I.list = {
         name = "BALA RICOCHETE", desc = "QUICA NAS PAREDES", icon = "R", c = col.sky,
         apply = function(p)
             p.bounce = p.bounce + 2
-            p.range = p.range + 10
+            p.rangemul = p.rangemul + 0.2
         end,
     },
     {
@@ -64,9 +64,9 @@ I.list = {
     {
         name = "BALA GIGANTE", desc = "DANO ++ / MAIS LENTA", icon = "B", c = col.red,
         apply = function(p)
-            p.dmg = p.dmg + 2.5
-            p.bulr = math.min(5, p.bulr + 2)
-            p.rate = p.rate * 1.2
+            p.dmgmul = p.dmgmul + 0.7
+            p.bulradd = math.min(3, p.bulradd + 2)
+            p.ratemul = p.ratemul * 1.2
         end,
     },
     {

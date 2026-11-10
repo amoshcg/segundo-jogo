@@ -114,13 +114,14 @@ end
 
 -- -------------------------------------------------------------------
 -- Controle. Mesmo mapeamento do primeiro-jogo (controle SNES):
---   A = BTN_G, B = BTN_Z, X = BTN_X, Y = BTN_F, L = BTN_Q, R = BTN_E
+--   A = BTN_G, B = BTN_Z, X = BTN_X, Y = BTN_F, R = BTN_E
 --   Teclado: W A S D = direcional, G = Y, J = X, H = A, K = B
 -- Os botoes ficam em losango: Y esquerda, X cima, A direita, B baixo.
+-- O L (BTN_Q) trava o console, entao nem e lido.
 -- Jogador 1 e o controle 0 e jogador 2 e o controle 1.
 -- -------------------------------------------------------------------
-local NAMES = { "left", "right", "up", "down", "a", "b", "x", "y", "l", "r" }
-local IDS = { LEFT, RIGHT, UP, DOWN, BTN_G, BTN_Z, BTN_X, BTN_F, BTN_Q, BTN_E }
+local NAMES = { "left", "right", "up", "down", "a", "b", "x", "y", "r" }
+local IDS = { LEFT, RIGHT, UP, DOWN, BTN_G, BTN_Z, BTN_X, BTN_F, BTN_E }
 local now = { {}, {} }
 local old = { {}, {} }
 for pl = 1, 2 do
@@ -134,7 +135,7 @@ end
 function K.poll()
     for pl = 1, 2 do
         local n, o = now[pl], old[pl]
-        for i = 1, 10 do
+        for i = 1, #NAMES do
             local name, id = NAMES[i], IDS[i]
             o[name] = n[name]
             local v = false
@@ -163,7 +164,7 @@ end
 local W = {
     screen = "title",
     players = {}, enemies = {}, ebul = {}, pbul = {},
-    parts = {}, spawns = {}, warns = {}, texts = {},
+    parts = {}, spawns = {}, warns = {}, texts = {}, booms = {},
     shake = 0, time = 0, level = 1, coins = 0, kills = 0, rooms = 0,
     nplayers = 1, locked = false, shadow = col.ink,
 }
